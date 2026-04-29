@@ -15,6 +15,17 @@ struct node {
     char place[20];
 };
 
+/* -------- SYMBOL TABLE -------- */
+char symbols[100][20];
+int symCount = 0;
+
+void addSymbol(char *s) {
+    for(int i=0;i<symCount;i++)
+        if(strcmp(symbols[i],s)==0) return;
+    strcpy(symbols[symCount++], s);
+}
+
+
 /* ---------- HELPERS ---------- */
 struct node* newNode() {
     struct node* n = (struct node*)malloc(sizeof(struct node));
@@ -60,6 +71,85 @@ void printTAC() {
     for(int i=0;i<globalSize;i++)
         printf("%s\n", globalCode[i]);
 }
+
+/* -------- SIC GENERATION -------- Samaksh*/
+void generateSIC(struct node* n) {
+
+    printf("\n--- SIC CODE ---\nSTART 0\n");
+
+    for (int i = 0; i < n->size; i++) {
+
+        char res[20], op1[20], op2[20], rel[5];
+
+        /* Skip condition TAC */
+        if (sscanf(n->code[i], "%s = %s %s %s", res, op1, rel, op2) == 4 &&
+            (strcmp(rel,"<")==0||strcmp(rel,">")==0||
+             strcmp(rel,"==")==0||strcmp(rel,"<=")==0||
+             strcmp(rel,">=")==0)) continue;
+
+        /* Arithmetic */
+        if (sscanf(n->code[i], "%s = %s + %s", res, op1, op2)==3) {
+            printf("LDA %s\nADD %s\nSTA %s\n",op1,op2,res);
+        }
+        else if (sscanf(n->code[i], "%s = %s - %s", res, op1, op2)==3) {
+            printf("LDA %s\nSUB %s\nSTA %s\n",op1,op2,res);
+        }
+        else if (sscanf(n->code[i], "%s = %s * %s", res, op1, op2)==3) {
+            printf("LDA %s\nMUL %s\nSTA %s\n",op1,op2,res);
+        }
+        else if (sscanf(n->code[i], "%s = %s / %s", res, op1, op2)==3) {
+            printf("LDA %s\nDIV %s\nSTA %s\n",op1,op2,res);
+        }
+
+        /* Assign */
+        else if (sscanf(n->code[i], "%s = %s", res, op1)==2) {
+            printf("LDA %s\nSTA %s\n",op1,res);
+        }
+
+        /* Print */
+        else if (strncmp(n->code[i],"print",5)==0) {
+            sscanf(n->code[i],"print %s",op1);
+            printf("LDA %s\nWD OUTPUT\n",op1);
+        }
+
+        /* Label */
+        else if (strchr(n->code[i],':')) {
+            printf("%s\n",n->code[i]);
+        }
+
+        /* Goto */
+        else if (strncmp(n->code[i],"goto",4)==0) {
+            sscanf(n->code[i],"goto %s",op1);
+            printf("J %s\n",op1);
+        }
+
+        /* IF */
+        else if (strncmp(n->code[i],"if",2)==0) {
+
+            char cond[20], label[20];
+            sscanf(n->code[i],"if %s goto %s",cond,label);
+
+            char prev[100];
+            strcpy(prev,n->code[i-1]);
+
+            if(sscanf(prev,"%s = %s %s %s",res,op1,rel,op2)==4) {
+
+                printf("LDA %s\nCOMP %s\n",op1,op2);
+
+                if(strcmp(rel,"<")==0) printf("JLT %s\n",label);
+                else if(strcmp(rel,">")==0) printf("JGT %s\n",label);
+                else if(strcmp(rel,"==")==0) printf("JEQ %s\n",label);
+                else if(strcmp(rel,"<=")==0)
+                    printf("JLT %s\nJEQ %s\n",label,label);
+                else if(strcmp(rel,">=")==0)
+                    printf("JGT %s\nJEQ %s\n",label,label);
+            }
+        }
+    }
+
+    printf("END\n");
+}
+
 
 /* ---------- INTERPRETER ---------- */
 int vars[100];
@@ -186,7 +276,12 @@ void executeTAC() {
 %%
 
 program :
-    stmt_list { storeCode($1); }
+    stmt_list { 
+        storeCode($1); 
+        printTAC();
+        generateSIC($1);
+        executeTAC();
+    }
 ;
 
 stmt_list :
